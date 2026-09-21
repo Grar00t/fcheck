@@ -102,6 +102,15 @@ FC_MAX_PATH = 4096
 The serialized representation can store path strings up to
 `FC_MAX_PATH - 1` bytes, subject to filesystem and platform limits.
 
+## Symbolic links
+
+`fcheck build` does not follow symbolic links.
+
+Symlink entries are skipped, whether they point to files or
+directories. This prevents symlink traversal outside the requested
+tree and avoids directory-symlink cycles. The target of a symlink is
+not indexed through that symlink path.
+
 ## Index format
 
 The first public format is version 1.

@@ -1,3 +1,7 @@
+#ifndef _POSIX_C_SOURCE
+#define _POSIX_C_SOURCE 200809L
+#endif
+
 #include "fcheck.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -314,7 +318,12 @@ static fc_status scan_dir(const char *root, const char *rel,
         if (ps != FC_OK) { closedir(d); return ps; }
 
         struct stat st;
-        if (stat(child_full, &st) != 0) continue;
+        if (lstat(child_full, &st) != 0) continue;
+
+        /* Symbolic links are outside the build traversal policy.
+         * Do not follow file or directory symlinks. */
+        if (S_ISLNK(st.st_mode))
+            continue;
 
         if (S_ISDIR(st.st_mode)) {
             fc_status s = scan_dir(root, child_rel, index_path, v);

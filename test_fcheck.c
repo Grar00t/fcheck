@@ -1,3 +1,7 @@
+#ifndef _POSIX_C_SOURCE
+#define _POSIX_C_SOURCE 200809L
+#endif
+
 #include "fcheck.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -542,6 +546,84 @@ static void test_embedded_nul_paths_rejected(void) {
     );
 }
 
+
+static void test_symlinks_not_followed(void) {
+    run_quiet(
+        "rm -rf "
+        "t_fc_dir "
+        "t_fc_out "
+        "t_fc.idx"
+    );
+
+    run_quiet("mkdir -p t_fc_dir/sub t_fc_out/sub");
+
+    wf("t_fc_dir/inside.txt", "inside");
+    wf("t_fc_out/outside.txt", "outside");
+    wf("t_fc_out/sub/nested.txt", "nested");
+
+    CHECK(
+        symlink(
+            "../t_fc_out/outside.txt",
+            "t_fc_dir/file-link"
+        ) == 0,
+        "create file symlink"
+    );
+
+    CHECK(
+        symlink(
+            "../t_fc_out",
+            "t_fc_dir/dir-link"
+        ) == 0,
+        "create directory symlink"
+    );
+
+    CHECK(
+        symlink(
+            "..",
+            "t_fc_dir/sub/back"
+        ) == 0,
+        "create symlink cycle"
+    );
+
+    CHECK(
+        fc_index_build(
+            "t_fc_dir",
+            "t_fc.idx"
+        ) == FC_OK,
+        "build index without following symlinks"
+    );
+
+    struct stat st;
+
+    CHECK(
+        stat("t_fc.idx", &st) == 0,
+        "stat symlink-policy index"
+    );
+
+    if (stat("t_fc.idx", &st) == 0) {
+        CHECK(
+            (uint64_t)st.st_size ==
+                (uint64_t)FC_HEADER +
+                (uint64_t)FC_ENTRY,
+            "only regular in-root file indexed"
+        );
+    }
+
+    run_quiet("rm -rf t_fc_out");
+
+    CHECK(
+        verify_silent("t_fc.idx") == FC_OK,
+        "verify unaffected by removed symlink targets"
+    );
+
+    run_quiet(
+        "rm -rf "
+        "t_fc_dir "
+        "t_fc_out "
+        "t_fc.idx"
+    );
+}
+
 int main(void) {
     test_sha256_known();
     test_sha256_empty();
@@ -553,6 +635,7 @@ int main(void) {
     test_wrong_entry_size_header_rejected();
     test_empty_path_records_rejected();
     test_embedded_nul_paths_rejected();
+    test_symlinks_not_followed();
     printf("tests: %d, failed: %d\n", run, failed);
     return failed ? 1 : 0;
 }
