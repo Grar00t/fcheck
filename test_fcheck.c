@@ -624,6 +624,112 @@ static void test_symlinks_not_followed(void) {
     );
 }
 
+
+static void test_symlink_root_rejected(void) {
+    run_quiet(
+        "rm -rf "
+        "t_fc_root_real "
+        "t_fc_root_link "
+        "t_fc_root.idx"
+    );
+
+    run_quiet("mkdir -p t_fc_root_real/sub");
+    wf("t_fc_root_real/a.txt", "alpha");
+
+    CHECK(
+        symlink(
+            "t_fc_root_real",
+            "t_fc_root_link"
+        ) == 0,
+        "create root symlink"
+    );
+
+    CHECK(
+        fc_index_build(
+            "t_fc_root_link",
+            "t_fc_root.idx"
+        ) == FC_ERR_ARG,
+        "reject symlink root"
+    );
+
+    CHECK(
+        access("t_fc_root.idx", F_OK) != 0,
+        "symlink root creates no index"
+    );
+
+    CHECK(
+        fc_index_build(
+            "t_fc_root_link/",
+            "t_fc_root.idx"
+        ) == FC_ERR_ARG,
+        "reject symlink root with trailing slash"
+    );
+
+    CHECK(
+        access("t_fc_root.idx", F_OK) != 0,
+        "trailing-slash root creates no index"
+    );
+
+    CHECK(
+        fc_index_build(
+            "t_fc_root_link/.",
+            "t_fc_root.idx"
+        ) == FC_ERR_ARG,
+        "reject symlink root with slash-dot"
+    );
+
+    CHECK(
+        access("t_fc_root.idx", F_OK) != 0,
+        "slash-dot root creates no index"
+    );
+
+    CHECK(
+        fc_index_build(
+            "t_fc_root_link/sub/..",
+            "t_fc_root.idx"
+        ) == FC_ERR_ARG,
+        "reject symlink root through sub-dotdot alias"
+    );
+
+    CHECK(
+        access("t_fc_root.idx", F_OK) != 0,
+        "sub-dotdot root creates no index"
+    );
+
+    CHECK(
+        fc_index_build(
+            "t_fc_root_link//",
+            "t_fc_root.idx"
+        ) == FC_ERR_ARG,
+        "reject symlink root with repeated slash"
+    );
+
+    CHECK(
+        access("t_fc_root.idx", F_OK) != 0,
+        "repeated-slash root creates no index"
+    );
+
+    CHECK(
+        fc_index_build(
+            "t_fc_root_real",
+            "t_fc_root.idx"
+        ) == FC_OK,
+        "real directory root still builds"
+    );
+
+    CHECK(
+        verify_silent("t_fc_root.idx") == FC_OK,
+        "real directory root verifies"
+    );
+
+    run_quiet(
+        "rm -rf "
+        "t_fc_root_real "
+        "t_fc_root_link "
+        "t_fc_root.idx"
+    );
+}
+
 int main(void) {
     test_sha256_known();
     test_sha256_empty();
@@ -636,6 +742,7 @@ int main(void) {
     test_empty_path_records_rejected();
     test_embedded_nul_paths_rejected();
     test_symlinks_not_followed();
+    test_symlink_root_rejected();
     printf("tests: %d, failed: %d\n", run, failed);
     return failed ? 1 : 0;
 }

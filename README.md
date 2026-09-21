@@ -111,6 +111,11 @@ directories. This prevents symlink traversal outside the requested
 tree and avoids directory-symlink cycles. The target of a symlink is
 not indexed through that symlink path.
 
+The root path must not contain symbolic-link components. This
+includes a symbolic-link root written with aliases such as a trailing
+slash or `.` / `..` path components. Such roots are rejected rather
+than followed.
+
 ## Index format
 
 The first public format is version 1.

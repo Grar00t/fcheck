@@ -352,9 +352,66 @@ static fc_status scan_dir(const char *root, const char *rel,
     return FC_OK;
 }
 
+static fc_status validate_root_no_symlinks(const char *root) {
+    if (!root || !root[0])
+        return FC_ERR_ARG;
+
+    size_t n = strlen(root);
+    if (n >= FC_MAX_PATH)
+        return FC_ERR_ARG;
+
+    char path[FC_MAX_PATH];
+    memcpy(path, root, n + 1);
+
+    /*
+     * Check every path prefix before any traversal begins.
+     *
+     * Checking only lstat(root) is insufficient because spellings
+     * such as "link/", "link/.", or "link/sub/.." can cause the
+     * kernel to resolve an earlier symlink component first.
+     */
+    for (size_t i = 0; i < n; i++) {
+        if (path[i] != '/')
+            continue;
+
+        /* Skip leading and repeated separators. */
+        if (i == 0 || path[i - 1] == '/')
+            continue;
+
+        char saved = path[i];
+        path[i] = 0;
+
+        struct stat st;
+        int rc = lstat(path, &st);
+
+        path[i] = saved;
+
+        if (rc != 0)
+            return FC_ERR_IO;
+
+        if (S_ISLNK(st.st_mode))
+            return FC_ERR_ARG;
+    }
+
+    struct stat st;
+    if (lstat(path, &st) != 0)
+        return FC_ERR_IO;
+
+    if (S_ISLNK(st.st_mode))
+        return FC_ERR_ARG;
+
+    return FC_OK;
+}
+
 /* ---------- public ---------- */
 fc_status fc_index_build(const char *root, const char *index_path) {
     if (!root || !index_path) return FC_ERR_ARG;
+
+    fc_status root_status =
+        validate_root_no_symlinks(root);
+
+    if (root_status != FC_OK)
+        return root_status;
 
     entry_vec v = {0};
     fc_status s = scan_dir(root, "", index_path, &v);
