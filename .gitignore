@@ -1,0 +1,16 @@
+# Build outputs
+/fcheck
+/test_fcheck
+
+# Test artifacts
+/t_fc*
+/t_fc_dir/
+
+# Locally generated indexes
+*.idx
+
+# Editor / OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
