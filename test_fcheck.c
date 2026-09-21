@@ -440,6 +440,108 @@ static void test_empty_path_records_rejected(void) {
     run_quiet("rm -rf t_fc_dir t_fc.idx t_fc_zero.idx");
 }
 
+
+static int mutate_serialized_path(const char *path, int mode) {
+    FILE *f = fopen(path, "r+b");
+    if (!f)
+        return 0;
+
+    uint8_t lenbuf[4];
+
+    if (fseek(f, (long)FC_HEADER + 48L, SEEK_SET) != 0 ||
+        fread(lenbuf, 1, sizeof(lenbuf), f) != sizeof(lenbuf)) {
+        fclose(f);
+        return 0;
+    }
+
+    uint32_t plen =
+        (uint32_t)lenbuf[0] |
+        ((uint32_t)lenbuf[1] << 8) |
+        ((uint32_t)lenbuf[2] << 16) |
+        ((uint32_t)lenbuf[3] << 24);
+
+    if (plen < 2 || plen + 1 >= FC_ENTRY - 52) {
+        fclose(f);
+        return 0;
+    }
+
+    if (mode == 0) {
+        uint32_t bad = plen + 1;
+
+        lenbuf[0] = (uint8_t)bad;
+        lenbuf[1] = (uint8_t)(bad >> 8);
+        lenbuf[2] = (uint8_t)(bad >> 16);
+        lenbuf[3] = (uint8_t)(bad >> 24);
+
+        if (fseek(f, (long)FC_HEADER + 48L, SEEK_SET) != 0 ||
+            fwrite(lenbuf, 1, sizeof(lenbuf), f) != sizeof(lenbuf)) {
+            fclose(f);
+            return 0;
+        }
+    } else {
+        long offset = (long)FC_HEADER + 52L;
+
+        if (mode == 2)
+            offset += (long)plen - 1L;
+
+        if (fseek(f, offset, SEEK_SET) != 0 ||
+            fputc(0, f) == EOF) {
+            fclose(f);
+            return 0;
+        }
+    }
+
+    return fclose(f) == 0;
+}
+
+
+static void test_embedded_nul_paths_rejected(void) {
+    static const char *indexes[] = {
+        "t_fc_p5_plus.idx",
+        "t_fc_p5_first.idx",
+        "t_fc_p5_last.idx"
+    };
+
+    run_quiet(
+        "rm -rf t_fc_dir "
+        "t_fc_p5_good.idx "
+        "t_fc_p5_plus.idx "
+        "t_fc_p5_first.idx "
+        "t_fc_p5_last.idx"
+    );
+
+    run_quiet("mkdir -p t_fc_dir");
+    wf("t_fc_dir/a.txt", "alpha");
+
+    CHECK(fc_index_build("t_fc_dir", "t_fc_p5_good.idx") == FC_OK,
+          "build P5 canonical index");
+
+    CHECK(verify_silent("t_fc_p5_good.idx") == FC_OK,
+          "P5 canonical index verifies");
+
+    for (int mode = 0; mode < 3; mode++) {
+        CHECK(fc_index_build("t_fc_dir", indexes[mode]) == FC_OK,
+              "build P5 malformed-path source index");
+
+        CHECK(mutate_serialized_path(indexes[mode], mode),
+              "mutate P5 serialized path");
+
+        CHECK(fc_index_verify(indexes[mode]) == FC_ERR_FORMAT,
+              "verify rejects NUL within declared path");
+
+        CHECK(fc_index_dump(indexes[mode]) == FC_ERR_FORMAT,
+              "dump rejects NUL within declared path");
+    }
+
+    run_quiet(
+        "rm -rf t_fc_dir "
+        "t_fc_p5_good.idx "
+        "t_fc_p5_plus.idx "
+        "t_fc_p5_first.idx "
+        "t_fc_p5_last.idx"
+    );
+}
+
 int main(void) {
     test_sha256_known();
     test_sha256_empty();
@@ -450,6 +552,7 @@ int main(void) {
     test_verify_status_contract();
     test_wrong_entry_size_header_rejected();
     test_empty_path_records_rejected();
+    test_embedded_nul_paths_rejected();
     printf("tests: %d, failed: %d\n", run, failed);
     return failed ? 1 : 0;
 }

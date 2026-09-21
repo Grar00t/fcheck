@@ -248,6 +248,9 @@ static fc_status read_entry(FILE *fp, fc_entry *e, int *eof) {
     if (plen == 0 || plen >= FC_ENTRY - 52)
         return FC_ERR_FORMAT;
 
+    if (memchr(buf + 52, 0, plen) != NULL)
+        return FC_ERR_FORMAT;
+
     memcpy(e->path, buf + 52, plen);
     e->path[plen] = 0;
 
