@@ -198,6 +198,7 @@ static fc_status read_header(FILE *fp) {
     if (fread(h, 1, sizeof(h), fp) != sizeof(h)) return FC_ERR_FORMAT;
     if (memcmp(h, FC_MAGIC, 8) != 0) return FC_ERR_FORMAT;
     if (get_u32le(h+8) != FC_VERSION) return FC_ERR_FORMAT;
+    if (get_u32le(h+12) != FC_ENTRY) return FC_ERR_FORMAT;
     return FC_OK;
 }
 
@@ -244,7 +245,7 @@ static fc_status read_entry(FILE *fp, fc_entry *e, int *eof) {
     memcpy(e->digest, buf + 16, 32);
 
     uint32_t plen = get_u32le(buf + 48);
-    if (plen >= FC_ENTRY - 52)
+    if (plen == 0 || plen >= FC_ENTRY - 52)
         return FC_ERR_FORMAT;
 
     memcpy(e->path, buf + 52, plen);

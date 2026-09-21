@@ -308,6 +308,138 @@ static void test_sha256_boundary_vectors(void) {
     remove(path);
 }
 
+
+static void test_wrong_entry_size_header_rejected(void) {
+    run_quiet("rm -rf t_fc_dir t_fc.idx");
+    run_quiet("mkdir -p t_fc_dir");
+
+    wf("t_fc_dir/a.txt", "alpha");
+
+    CHECK(fc_index_build("t_fc_dir", "t_fc.idx") == FC_OK,
+          "build index for entry-size header test");
+
+    CHECK(verify_silent("t_fc.idx") == FC_OK,
+          "entry-size header baseline is valid");
+
+    FILE *f = fopen("t_fc.idx", "r+b");
+
+    CHECK(f != NULL,
+          "open index for entry-size header mutation");
+
+    if (f) {
+        uint32_t bad = FC_ENTRY + 1u;
+        uint8_t b[4];
+
+        b[0] = (uint8_t)(bad);
+        b[1] = (uint8_t)(bad >> 8);
+        b[2] = (uint8_t)(bad >> 16);
+        b[3] = (uint8_t)(bad >> 24);
+
+        int seek_ok = fseek(f, 12L, SEEK_SET) == 0;
+        size_t written = 0;
+
+        if (seek_ok)
+            written = fwrite(b, 1, sizeof(b), f);
+
+        CHECK(seek_ok && written == sizeof(b),
+              "mutate serialized entry-size header");
+
+        fclose(f);
+
+        CHECK(fc_index_verify("t_fc.idx") == FC_ERR_FORMAT,
+              "verify rejects wrong serialized entry size");
+
+        CHECK(fc_index_dump("t_fc.idx") == FC_ERR_FORMAT,
+              "dump rejects wrong serialized entry size");
+    }
+
+    run_quiet("rm -rf t_fc_dir t_fc.idx");
+}
+
+
+static void test_empty_path_records_rejected(void) {
+    run_quiet("rm -rf t_fc_dir t_fc.idx t_fc_zero.idx");
+    run_quiet("mkdir -p t_fc_dir");
+
+    wf("t_fc_dir/a.txt", "alpha");
+
+    CHECK(fc_index_build("t_fc_dir", "t_fc.idx") == FC_OK,
+          "build index for empty-path format tests");
+
+    CHECK(verify_silent("t_fc.idx") == FC_OK,
+          "empty-path test baseline is valid");
+
+    /* Mutate first serialized entry's path length to zero. */
+    FILE *f = fopen("t_fc.idx", "r+b");
+
+    CHECK(f != NULL,
+          "open index for empty-path mutation");
+
+    if (f) {
+        uint8_t zero_len[4] = {0, 0, 0, 0};
+
+        int seek_ok =
+            fseek(f, (long)FC_HEADER + 48L, SEEK_SET) == 0;
+
+        size_t written = 0;
+
+        if (seek_ok)
+            written = fwrite(
+                zero_len,
+                1,
+                sizeof(zero_len),
+                f
+            );
+
+        CHECK(seek_ok && written == sizeof(zero_len),
+              "write zero serialized path length");
+
+        fclose(f);
+
+        CHECK(fc_index_verify("t_fc.idx") == FC_ERR_FORMAT,
+              "verify rejects empty serialized path");
+
+        CHECK(fc_index_dump("t_fc.idx") == FC_ERR_FORMAT,
+              "dump rejects empty serialized path");
+    }
+
+    /*
+     * Build another valid index, then append one complete
+     * zero-filled record. Its serialized path length is zero.
+     */
+    CHECK(fc_index_build("t_fc_dir", "t_fc_zero.idx") == FC_OK,
+          "build index for zero-record test");
+
+    f = fopen("t_fc_zero.idx", "ab");
+
+    CHECK(f != NULL,
+          "open index for zero-record append");
+
+    if (f) {
+        uint8_t zero_record[FC_ENTRY] = {0};
+
+        size_t written = fwrite(
+            zero_record,
+            1,
+            sizeof(zero_record),
+            f
+        );
+
+        CHECK(written == sizeof(zero_record),
+              "append complete zero-filled record");
+
+        fclose(f);
+
+        CHECK(fc_index_verify("t_fc_zero.idx") == FC_ERR_FORMAT,
+              "verify rejects zero-filled complete record");
+
+        CHECK(fc_index_dump("t_fc_zero.idx") == FC_ERR_FORMAT,
+              "dump rejects zero-filled complete record");
+    }
+
+    run_quiet("rm -rf t_fc_dir t_fc.idx t_fc_zero.idx");
+}
+
 int main(void) {
     test_sha256_known();
     test_sha256_empty();
@@ -316,6 +448,8 @@ int main(void) {
     test_truncated_index_rejected();
     test_long_path_supported();
     test_verify_status_contract();
+    test_wrong_entry_size_header_rejected();
+    test_empty_path_records_rejected();
     printf("tests: %d, failed: %d\n", run, failed);
     return failed ? 1 : 0;
 }
