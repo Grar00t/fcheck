@@ -107,6 +107,7 @@ static void sha256_final(sha256_ctx *c, uint8_t out[32]) {
 }
 
 fc_status fc_sha256_file(const char *path, uint8_t out[FC_DIGEST]) {
+    if (!path || !out) return FC_ERR_ARG;
     FILE *f = fopen(path, "rb");
     if (!f) return FC_ERR_IO;
     sha256_ctx c;

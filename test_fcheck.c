@@ -730,7 +730,30 @@ static void test_symlink_root_rejected(void) {
     );
 }
 
+static void test_sha256_argument_contract(void) {
+    uint8_t digest[FC_DIGEST], unchanged[FC_DIGEST];
+    memset(digest, 0xa5, sizeof(digest));
+    memcpy(unchanged, digest, sizeof(digest));
+
+    CHECK(fc_sha256_file(NULL, digest) == FC_ERR_ARG,
+          "null SHA-256 path is rejected");
+    CHECK(memcmp(digest, unchanged, sizeof(digest)) == 0,
+          "invalid input preserves output digest");
+    CHECK(fc_sha256_file(NULL, NULL) == FC_ERR_ARG,
+          "both null SHA-256 arguments are rejected");
+
+    wf("t_fc_abc", "abc");
+    CHECK(fc_sha256_file("t_fc_abc", NULL) == FC_ERR_ARG,
+          "null SHA-256 output is rejected");
+    remove("t_fc_abc");
+    CHECK(fc_sha256_file("t_fc_abc", digest) == FC_ERR_IO,
+          "missing SHA-256 file retains IO status");
+    CHECK(memcmp(digest, unchanged, sizeof(digest)) == 0,
+          "IO failure preserves output digest");
+}
+
 int main(void) {
+    test_sha256_argument_contract();
     test_sha256_known();
     test_sha256_empty();
     test_sha256_boundary_vectors();
