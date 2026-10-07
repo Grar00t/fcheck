@@ -111,8 +111,17 @@ static void sha256_final(sha256_ctx *c, uint8_t out[32]) {
 
 fc_status fc_sha256_file(const char *path, uint8_t out[FC_DIGEST]) {
     if (!path || !out) return FC_ERR_ARG;
-    FILE *f = fopen(path, "rb");
-    if (!f) return FC_ERR_IO;
+
+    int fd = open(path, O_RDONLY | O_NOFOLLOW | O_CLOEXEC);
+    if (fd < 0)
+        return errno == ELOOP ? FC_ERR_ARG : FC_ERR_IO;
+
+    FILE *f = fdopen(fd, "rb");
+    if (!f) {
+        close(fd);
+        return FC_ERR_IO;
+    }
+
     sha256_ctx c;
     sha256_init(&c);
     uint8_t buf[65536];
@@ -124,7 +133,8 @@ fc_status fc_sha256_file(const char *path, uint8_t out[FC_DIGEST]) {
             break;
         }
     }
-    fclose(f);
+    if (fclose(f) != 0)
+        return FC_ERR_IO;
     sha256_final(&c, out);
     return FC_OK;
 }
