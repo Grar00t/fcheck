@@ -591,6 +591,77 @@ static void test_symlink_index_rejected(void) {
 }
 
 
+static void test_symlink_index_parent_rejected(void) {
+    run_quiet(
+        "rm -rf "
+        "t_fc_dir "
+        "t_fc_real_out "
+        "t_fc_link_out"
+    );
+
+    run_quiet("mkdir -p t_fc_dir t_fc_real_out");
+    wf("t_fc_dir/a.txt", "alpha");
+
+    CHECK(
+        symlink("t_fc_real_out", "t_fc_link_out") == 0,
+        "create symlink parent for baseline output"
+    );
+
+    CHECK(
+        fc_index_build(
+            "t_fc_dir",
+            "t_fc_link_out/baseline.idx"
+        ) == FC_ERR_ARG,
+        "reject baseline output through symlink parent"
+    );
+
+    CHECK(
+        access("t_fc_real_out/baseline.idx", F_OK) != 0,
+        "rejected parent symlink creates no outside baseline"
+    );
+
+    run_quiet(
+        "rm -rf "
+        "t_fc_dir "
+        "t_fc_real_out "
+        "t_fc_link_out"
+    );
+}
+
+static void test_relative_root_is_cwd_independent(void) {
+    char cwd[4096];
+
+    run_quiet("rm -rf t_fc_dir t_fc.idx");
+    run_quiet("mkdir -p t_fc_dir");
+    wf("t_fc_dir/a.txt", "alpha");
+
+    if (getcwd(cwd, sizeof(cwd)) == NULL) {
+        CHECK(0, "capture cwd for absolute-path regression");
+        run_quiet("rm -rf t_fc_dir t_fc.idx");
+        return;
+    }
+    CHECK(1, "capture cwd for absolute-path regression");
+
+    CHECK(fc_index_build("t_fc_dir", "t_fc.idx") == FC_OK,
+          "build relative-root index");
+
+    if (chdir("t_fc_dir") != 0) {
+        CHECK(0, "change cwd after baseline build");
+        run_quiet("rm -rf t_fc_dir t_fc.idx");
+        return;
+    }
+    CHECK(1, "change cwd after baseline build");
+
+    CHECK(verify_silent("../t_fc.idx") == FC_OK,
+          "relative-root baseline verifies from a different cwd");
+
+    if (chdir(cwd) != 0)
+        abort();
+    CHECK(1, "restore cwd after absolute-path regression");
+
+    run_quiet("rm -rf t_fc_dir t_fc.idx");
+}
+
 static void test_symlinks_not_followed(void) {
     run_quiet(
         "rm -rf "
@@ -856,6 +927,8 @@ int main(void) {
     test_empty_path_records_rejected();
     test_embedded_nul_paths_rejected();
     test_symlink_index_rejected();
+    test_symlink_index_parent_rejected();
+    test_relative_root_is_cwd_independent();
     test_symlinks_not_followed();
     test_symlink_root_rejected();
     test_verify_rejects_symlink_replacement();

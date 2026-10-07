@@ -11,9 +11,10 @@ It does **not** authenticate the baseline itself. An actor that can modify both 
 - SHA-256 is computed by the bundled streaming implementation.
 - Symbolic links are not followed while building a baseline.
 - Root paths containing symbolic-link components are rejected.
-- Baseline output refuses a final path that is a symbolic link.
+- Baseline output rejects symbolic links in the final path and parent components.
 - Malformed or truncated indexes fail closed as operational errors.
 - Baseline creation fails closed if directory enumeration or file metadata lookup fails.
+- Relative scan roots are anchored to an absolute path before entries are serialized.
 - Integrity mismatch is separated from operational failure by exit status.
 
 ## Reporting

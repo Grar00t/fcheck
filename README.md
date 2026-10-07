@@ -52,7 +52,9 @@ The current test suite covers:
 - long-path handling;
 - integrity-mismatch status behavior;
 - clean, mismatch, and operational CLI exit codes;
-- symbolic-link replacement after baseline creation.
+- symbolic-link replacement after baseline creation;
+- symbolic-link baseline outputs, including symlinked parent directories;
+- verification of a relative-root baseline after changing the working directory.
 
 Sanitizer validation:
 
@@ -120,14 +122,17 @@ than followed.
 
 ## Baseline output path
 
-When creating an index, `fcheck` refuses a final output path that is a
-symbolic link. This prevents `build` from truncating the symlink target.
+When creating an index, `fcheck` rejects a symbolic-link output path and
+any symbolic-link parent component. This prevents `build` from following
+the configured output path outside the intended directory tree.
 
 ## Index format
 
 The first public format is version 1.
 
-It stores absolute paths captured when the baseline is built.
+It stores absolute paths. Relative roots are anchored to the build process's
+current working directory before traversal, so later verification does not
+depend on the verifier's working directory.
 
 Pre-publication prototype indexes using 128-byte records are not
 compatible with the current format and must be rebuilt.
