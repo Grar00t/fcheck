@@ -118,6 +118,11 @@ includes a symbolic-link root written with aliases such as a trailing
 slash or `.` / `..` path components. Such roots are rejected rather
 than followed.
 
+## Baseline output path
+
+When creating an index, `fcheck` refuses a final output path that is a
+symbolic link. This prevents `build` from truncating the symlink target.
+
 ## Index format
 
 The first public format is version 1.

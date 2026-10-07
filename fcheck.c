@@ -8,6 +8,9 @@
 #include <string.h>
 #include <dirent.h>
 #include <sys/stat.h>
+#include <fcntl.h>
+#include <errno.h>
+#include <unistd.h>
 
 /* ---------- SHA-256 (streaming) ---------- */
 static const uint32_t K256[64] = {
@@ -302,7 +305,17 @@ static fc_status scan_dir(const char *root, const char *rel,
     if (!d) return FC_ERR_IO;
 
     struct dirent *de;
-    while ((de = readdir(d)) != NULL) {
+    for (;;) {
+        errno = 0;
+        de = readdir(d);
+        if (de == NULL) {
+            if (errno != 0) {
+                closedir(d);
+                return FC_ERR_IO;
+            }
+            break;
+        }
+
         if (strcmp(de->d_name, ".") == 0 || strcmp(de->d_name, "..") == 0) continue;
 
         char child_rel[FC_MAX_PATH];
@@ -319,7 +332,10 @@ static fc_status scan_dir(const char *root, const char *rel,
         if (ps != FC_OK) { closedir(d); return ps; }
 
         struct stat st;
-        if (lstat(child_full, &st) != 0) continue;
+        if (lstat(child_full, &st) != 0) {
+            closedir(d);
+            return FC_ERR_IO;
+        }
 
         /* Symbolic links are outside the build traversal policy.
          * Do not follow file or directory symlinks. */
@@ -420,8 +436,18 @@ fc_status fc_index_build(const char *root, const char *index_path) {
 
     qsort(v.ents, v.count, sizeof(fc_entry), entry_cmp);
 
-    FILE *fp = fopen(index_path, "wb");
-    if (!fp) { free(v.ents); return FC_ERR_IO; }
+    int fd = open(index_path, O_WRONLY | O_CREAT | O_TRUNC | O_NOFOLLOW, 0666);
+    if (fd < 0) {
+        free(v.ents);
+        return errno == ELOOP ? FC_ERR_ARG : FC_ERR_IO;
+    }
+
+    FILE *fp = fdopen(fd, "wb");
+    if (!fp) {
+        close(fd);
+        free(v.ents);
+        return FC_ERR_IO;
+    }
 
     s = write_header(fp);
     if (s == FC_OK) {
