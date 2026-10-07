@@ -12,6 +12,7 @@ those files against the stored index.
 - content modification;
 - file-size changes;
 - missing indexed files;
+- file-type changes such as replacing an indexed regular file with a symbolic link;
 - malformed or truncated index files.
 
 Typical uses include verifying project trees after copying, backup,
@@ -50,7 +51,8 @@ The current test suite covers:
 - truncated-index rejection;
 - long-path handling;
 - integrity-mismatch status behavior;
-- clean, mismatch, and operational CLI exit codes.
+- clean, mismatch, and operational CLI exit codes;
+- symbolic-link replacement after baseline creation.
 
 Sanitizer validation:
 
