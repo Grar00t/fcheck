@@ -141,8 +141,14 @@ compatible with the current format and must be rebuilt.
 
 File hashing is streaming; files are not loaded entirely into memory.
 
-The local SHA-256 implementation is covered by known-answer and
-padding-boundary tests. This does not make the index authenticated.
+Hashing opens the final path component with `O_NOFOLLOW`. A final
+symbolic link is rejected instead of followed. This closes the direct
+file-to-symlink swap window between directory scanning and hashing;
+ancestor-directory replacement races remain outside this check.
+
+The local SHA-256 implementation is covered by known-answer,
+padding-boundary, and symlink-rejection tests. This does not make the
+index authenticated.
 
 ## Platform evidence
 
