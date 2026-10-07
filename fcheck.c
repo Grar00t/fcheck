@@ -458,9 +458,15 @@ fc_status fc_index_verify(const char *index_path) {
             break;
 
         struct stat st;
-        if (stat(e.path, &st) != 0) {
+        if (lstat(e.path, &st) != 0) {
             printf("%-12s %s\n", fc_result_str(FC_MISSING), e.path);
             missing++;
+            continue;
+        }
+        if (!S_ISREG(st.st_mode)) {
+            printf("%-12s %s (file type changed)\n",
+                   fc_result_str(FC_MODIFIED), e.path);
+            modified++;
             continue;
         }
         if ((uint64_t)st.st_size != e.size) {
