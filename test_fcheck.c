@@ -845,6 +845,33 @@ static void test_symlink_root_rejected(void) {
     );
 }
 
+static void test_sha256_symlink_rejected(void) {
+    run_quiet("rm -f t_fc_sha_target t_fc_sha_link");
+    wf("t_fc_sha_target", "abc");
+
+    CHECK(
+        symlink("t_fc_sha_target", "t_fc_sha_link") == 0,
+        "create SHA-256 symlink fixture"
+    );
+
+    uint8_t digest[FC_DIGEST], unchanged[FC_DIGEST];
+    memset(digest, 0xa5, sizeof(digest));
+    memcpy(unchanged, digest, sizeof(digest));
+
+    CHECK(
+        fc_sha256_file("t_fc_sha_link", digest) == FC_ERR_ARG,
+        "SHA-256 refuses final symlink component"
+    );
+
+    CHECK(
+        memcmp(digest, unchanged, sizeof(digest)) == 0,
+        "rejected SHA-256 symlink preserves output digest"
+    );
+
+    run_quiet("rm -f t_fc_sha_target t_fc_sha_link");
+}
+
+
 static void test_sha256_argument_contract(void) {
     uint8_t digest[FC_DIGEST], unchanged[FC_DIGEST];
     memset(digest, 0xa5, sizeof(digest));
@@ -916,6 +943,7 @@ static void test_verify_rejects_symlink_replacement(void) {
 
 int main(void) {
     test_sha256_argument_contract();
+    test_sha256_symlink_rejected();
     test_sha256_known();
     test_sha256_empty();
     test_sha256_boundary_vectors();
