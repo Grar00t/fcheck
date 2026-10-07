@@ -547,6 +547,50 @@ static void test_embedded_nul_paths_rejected(void) {
 }
 
 
+static void test_symlink_index_rejected(void) {
+    run_quiet(
+        "rm -rf "
+        "t_fc_dir "
+        "t_fc.idx "
+        "t_fc_target"
+    );
+
+    run_quiet("mkdir -p t_fc_dir");
+    wf("t_fc_dir/a.txt", "alpha");
+    wf("t_fc_target", "sentinel");
+
+    CHECK(
+        symlink("t_fc_target", "t_fc.idx") == 0,
+        "create symlink baseline output"
+    );
+
+    CHECK(
+        fc_index_build("t_fc_dir", "t_fc.idx") == FC_ERR_ARG,
+        "reject symlink baseline output"
+    );
+
+    struct stat st;
+    CHECK(
+        stat("t_fc_target", &st) == 0,
+        "stat symlink target after rejected build"
+    );
+
+    if (stat("t_fc_target", &st) == 0) {
+        CHECK(
+            st.st_size == 8,
+            "rejected build leaves symlink target unchanged"
+        );
+    }
+
+    run_quiet(
+        "rm -rf "
+        "t_fc_dir "
+        "t_fc.idx "
+        "t_fc_target"
+    );
+}
+
+
 static void test_symlinks_not_followed(void) {
     run_quiet(
         "rm -rf "
@@ -811,6 +855,7 @@ int main(void) {
     test_wrong_entry_size_header_rejected();
     test_empty_path_records_rejected();
     test_embedded_nul_paths_rejected();
+    test_symlink_index_rejected();
     test_symlinks_not_followed();
     test_symlink_root_rejected();
     test_verify_rejects_symlink_replacement();
