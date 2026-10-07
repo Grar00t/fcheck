@@ -305,7 +305,17 @@ static fc_status scan_dir(const char *root, const char *rel,
     if (!d) return FC_ERR_IO;
 
     struct dirent *de;
-    while ((de = readdir(d)) != NULL) {
+    for (;;) {
+        errno = 0;
+        de = readdir(d);
+        if (de == NULL) {
+            if (errno != 0) {
+                closedir(d);
+                return FC_ERR_IO;
+            }
+            break;
+        }
+
         if (strcmp(de->d_name, ".") == 0 || strcmp(de->d_name, "..") == 0) continue;
 
         char child_rel[FC_MAX_PATH];
@@ -322,7 +332,10 @@ static fc_status scan_dir(const char *root, const char *rel,
         if (ps != FC_OK) { closedir(d); return ps; }
 
         struct stat st;
-        if (lstat(child_full, &st) != 0) continue;
+        if (lstat(child_full, &st) != 0) {
+            closedir(d);
+            return FC_ERR_IO;
+        }
 
         /* Symbolic links are outside the build traversal policy.
          * Do not follow file or directory symlinks. */
