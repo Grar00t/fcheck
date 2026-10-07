@@ -10,7 +10,7 @@ The checker is intended to detect unexpected changes to files after a baseline h
 - file truncation or extension
 - missing indexed files
 - malformed or truncated index data
-- accidental or hostile symlink traversal during baseline creation
+- accidental symlink traversal and pre-existing symlink components during baseline creation
 
 ## Out of scope
 
@@ -20,6 +20,7 @@ The checker is intended to detect unexpected changes to files after a baseline h
 - malware detection or behavioral analysis
 - remote attestation
 - cryptographic signing of the index
+- protection against concurrent filesystem namespace mutation or symlink-swap races during a build
 
 ## Trust boundary
 

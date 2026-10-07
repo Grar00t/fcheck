@@ -175,12 +175,32 @@ static uint64_t get_u64le(const uint8_t *p) {
 /* ---------- path join with overflow detection ---------- */
 static fc_status join_path(char *out, size_t outsz, const char *a, const char *b) {
     size_t al = strlen(a), bl = strlen(b);
-    if (al + 1 + bl + 1 > outsz) return FC_ERR_ARG;
+    size_t sep = (al > 0 && a[al - 1] != '/') ? 1u : 0u;
+    if (al + sep + bl + 1 > outsz) return FC_ERR_ARG;
     memcpy(out, a, al);
-    out[al] = '/';
-    memcpy(out + al + 1, b, bl);
-    out[al + 1 + bl] = 0;
+    if (sep) out[al] = '/';
+    memcpy(out + al + sep, b, bl);
+    out[al + sep + bl] = 0;
     return FC_OK;
+}
+
+static fc_status make_absolute_root(const char *root, char out[FC_MAX_PATH]) {
+    if (!root || !root[0] || !out)
+        return FC_ERR_ARG;
+
+    if (root[0] == '/') {
+        size_t n = strlen(root);
+        if (n >= FC_MAX_PATH)
+            return FC_ERR_ARG;
+        memcpy(out, root, n + 1);
+        return FC_OK;
+    }
+
+    char cwd[FC_MAX_PATH];
+    if (!getcwd(cwd, sizeof(cwd)))
+        return FC_ERR_IO;
+
+    return join_path(out, FC_MAX_PATH, cwd, root);
 }
 
 /* ---------- index entry ---------- */
@@ -420,18 +440,72 @@ static fc_status validate_root_no_symlinks(const char *root) {
     return FC_OK;
 }
 
+static fc_status validate_output_no_symlink_components(const char *path) {
+    if (!path || !path[0])
+        return FC_ERR_ARG;
+
+    size_t n = strlen(path);
+    if (n >= FC_MAX_PATH)
+        return FC_ERR_ARG;
+
+    char copy[FC_MAX_PATH];
+    memcpy(copy, path, n + 1);
+
+    for (size_t i = 0; i < n; i++) {
+        if (copy[i] != '/')
+            continue;
+        if (i == 0 || copy[i - 1] == '/')
+            continue;
+
+        char saved = copy[i];
+        copy[i] = 0;
+
+        struct stat st;
+        int rc = lstat(copy, &st);
+        int saved_errno = errno;
+
+        copy[i] = saved;
+
+        if (rc != 0) {
+            if (saved_errno == ENOENT)
+                return FC_OK;
+            return FC_ERR_IO;
+        }
+
+        if (S_ISLNK(st.st_mode))
+            return FC_ERR_ARG;
+    }
+
+    struct stat st;
+    if (lstat(copy, &st) == 0)
+        return S_ISLNK(st.st_mode) ? FC_ERR_ARG : FC_OK;
+
+    return errno == ENOENT ? FC_OK : FC_ERR_IO;
+}
+
 /* ---------- public ---------- */
 fc_status fc_index_build(const char *root, const char *index_path) {
     if (!root || !index_path) return FC_ERR_ARG;
 
+    char absolute_root[FC_MAX_PATH];
+    fc_status s = make_absolute_root(root, absolute_root);
+    if (s != FC_OK)
+        return s;
+
     fc_status root_status =
-        validate_root_no_symlinks(root);
+        validate_root_no_symlinks(absolute_root);
 
     if (root_status != FC_OK)
         return root_status;
 
+    fc_status output_status =
+        validate_output_no_symlink_components(index_path);
+
+    if (output_status != FC_OK)
+        return output_status;
+
     entry_vec v = {0};
-    fc_status s = scan_dir(root, "", index_path, &v);
+    s = scan_dir(absolute_root, "", index_path, &v);
     if (s != FC_OK) { free(v.ents); return s; }
 
     qsort(v.ents, v.count, sizeof(fc_entry), entry_cmp);
