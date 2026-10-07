@@ -36,7 +36,7 @@ const char *fc_result_str(fc_result r);
 fc_status fc_index_build(const char *root, const char *index_path);
 fc_status fc_index_verify(const char *index_path);
 fc_status fc_index_dump(const char *index_path);
-/* NULL path/output returns FC_ERR_ARG; failures leave a valid output unchanged. */
+/* NULL path/output and a final symlink return FC_ERR_ARG; failures leave output unchanged. */
 fc_status fc_sha256_file(const char *path, uint8_t out[FC_DIGEST]);
 
 #endif
