@@ -14,6 +14,8 @@ The checker is intended to detect unexpected changes to files after a baseline h
 
 ## Out of scope
 
+- races that replace an ancestor directory component after root validation
+
 - an attacker who can rewrite both the files and the baseline index
 - authenticity of the person who created the baseline
 - confidentiality of indexed paths or hashes
