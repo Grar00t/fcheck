@@ -752,6 +752,53 @@ static void test_sha256_argument_contract(void) {
           "IO failure preserves output digest");
 }
 
+
+static void test_verify_rejects_symlink_replacement(void) {
+    run_quiet(
+        "rm -rf "
+        "t_fc_verify_dir "
+        "t_fc_verify_out "
+        "t_fc_verify.idx"
+    );
+
+    run_quiet("mkdir -p t_fc_verify_dir t_fc_verify_out");
+    wf("t_fc_verify_dir/a.txt", "alpha");
+    wf("t_fc_verify_out/a.txt", "alpha");
+
+    CHECK(
+        fc_index_build(
+            "t_fc_verify_dir",
+            "t_fc_verify.idx"
+        ) == FC_OK,
+        "build index before symlink replacement"
+    );
+
+    CHECK(
+        remove("t_fc_verify_dir/a.txt") == 0,
+        "remove indexed regular file"
+    );
+
+    CHECK(
+        symlink(
+            "../t_fc_verify_out/a.txt",
+            "t_fc_verify_dir/a.txt"
+        ) == 0,
+        "replace indexed file with symlink"
+    );
+
+    CHECK(
+        verify_silent("t_fc_verify.idx") == FC_ERR_MISMATCH,
+        "verify rejects symlink replacement even when target bytes match"
+    );
+
+    run_quiet(
+        "rm -rf "
+        "t_fc_verify_dir "
+        "t_fc_verify_out "
+        "t_fc_verify.idx"
+    );
+}
+
 int main(void) {
     test_sha256_argument_contract();
     test_sha256_known();
@@ -766,6 +813,7 @@ int main(void) {
     test_embedded_nul_paths_rejected();
     test_symlinks_not_followed();
     test_symlink_root_rejected();
+    test_verify_rejects_symlink_replacement();
     printf("tests: %d, failed: %d\n", run, failed);
     return failed ? 1 : 0;
 }
